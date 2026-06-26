@@ -329,7 +329,9 @@ Hãy viết 2-4 câu, trong đó có cả:
 - bạn chọn lát cắt nào,
 - và vì sao đây là đơn vị đủ nhỏ để eval.
 
-> ...
+Tôi chọn lát cắt là một ticket support đi vào và AI phải gán category, mức độ khẩn, team phụ trách, và cờ cần người thật xử lý ngay. Đây là đơn vị đủ nhỏ để eval vì nó gắn trực tiếp với quyết định vận hành ở inbox nội bộ, nhưng vẫn đủ lớn để bắt các lỗi ảnh hưởng thật như route sai, thiếu escalation, hoặc vỡ schema.
+
+Nếu AI sai ở unit này, ticket có thể bị đưa sang team không xử lý được, hoặc bị chậm đến mức enterprise customer bị ảnh hưởng công việc. Vì vậy đây là lát cắt vừa đủ nhỏ để đo, nhưng hậu quả của lỗi vẫn rõ ràng và có thể kiểm tra được.
 
 ### 2. Quality Question
 
@@ -350,7 +352,9 @@ Hãy viết 2-4 câu, trong đó có cả:
 - câu hỏi chất lượng bạn chọn,
 - và vì sao nếu fail ở đây thì ticket sẽ đi sai hoặc gây mất trust.
 
-> ...
+AI có gắn đúng route và escalation để ticket không bị đi sai hàng xử lý không, đặc biệt với ticket enterprise có dấu hiệu chặn công việc hoặc liên quan billing. Bắt buộc là category phải hợp lý, urgency phải không bị hạ thấp sai, và ticket high-risk phải được đẩy cho người thật.
+
+Nếu fail ở đây, ticket sẽ vào sai queue hoặc bị xem như case bình thường dù đang chặn công việc của khách. Điều đó làm mất trust của support ops và có thể làm trễ xử lý các case cần phản ứng nhanh.
 
 ### 3. Output Contract tối thiểu
 
@@ -370,7 +374,14 @@ Mẹo lấy từ ví dụ full luồng:
 
 Đừng chỉ liệt kê field. Với mỗi field bạn giữ lại, hãy giải thích ngắn vì sao nó cần cho UI, routing, escalation, hoặc eval.
 
-> ...
+- `ticket_id`: để trace và đối chiếu với hệ thống inbox, phục vụ eval regression.
+- `category`: để render nhãn loại yêu cầu và route sang team đúng.
+- `urgency`: để quyết định hàng ưu tiên và mức độ khẩn hiển thị trên UI.
+- `route_to`: để hệ thống biết ticket đi vào team nào, đây là quyết định vận hành chính.
+- `requires_human`: để bật checkpoint người thật khi ticket có rủi ro cao.
+- `reason_codes`: để giải thích ngắn vì sao AI ra quyết định, phục vụ human review và LLM judge.
+- `confidence`: để chọn case nào cần review thêm, nhưng không được dùng một mình làm gate.
+- `queue_priority`: để đẩy ticket lên ưu tiên cao hoặc giữ ở hàng bình thường.
 
 ### 4. Eval Decision Map
 
@@ -384,12 +395,14 @@ Mẹo lấy từ ví dụ full luồng:
 
 | Thành phần cần chấm | Code | LLM | Human | Expert | Lý do |
 | --- | ---: | ---: | ---: | ---: | --- |
-|  |  |  |  |  |  |
-|  |  |  |  |  |  |
-|  |  |  |  |  |  |
-|  |  |  |  |  |  |
-|  |  |  |  |  |  |
-|  |  |  |  |  |  |
+| Schema và allowed enums | ✓ |  |  |  | Đây là ràng buộc deterministic, chỉ cần code để bắt vỡ schema và giá trị ngoài danh sách cho phép. |
+| `ticket_id` và trace mapping | ✓ |  |  |  | Dữ liệu định danh phải khớp tuyệt đối để eval và logging không bị lệch. |
+| `category` |  | ✓ | ✓ |  | Có thể chấm bằng LLM theo nghĩa ticket, nhưng human cần cho các case khó/ambiguous để làm gold. |
+| `urgency` |  | ✓ | ✓ |  | Mức khẩn có ngữ nghĩa vận hành, code không đọc được ngữ cảnh như “blocking work”. |
+| `route_to` | ✓ |  | ✓ |  | Một số route có thể kiểm bằng rule, nhưng các case mơ hồ cần human xác nhận để tránh nhầm queue. |
+| `requires_human` / escalation | ✓ |  | ✓ |  | Đây là invariant an toàn, code phải bắt rule bắt buộc; human review các case rìa để tránh bỏ sót escalation. |
+| `reason_codes` |  | ✓ | ✓ |  | Cần đọc hiểu nội dung ticket để biết lý do có bám sát input hay không. |
+| `confidence` | ✓ |  |  |  | Có thể kiểm format/range bằng code; không nên để confidence tự quyết định chất lượng. |
 
 Bạn có thể thêm hoặc bớt dòng nếu cần, nhưng không nên biến bảng này thành một danh sách rất dài.
 
@@ -408,6 +421,27 @@ Mỗi ý nên viết theo dạng:
 - Kiểm tra: [rule]
   Vì sao nên giao cho code:
 
+- Kiểm tra: Output phải parse được đúng schema JSON và không thiếu field bắt buộc.
+    Vì sao nên giao cho code: Đây là validation xác định, chỉ cần schema checker là bắt được.
+- Kiểm tra: `category` phải thuộc allowed enum.
+    Vì sao nên giao cho code: Enum là rule cứng, không cần judgment ngữ nghĩa.
+- Kiểm tra: `urgency` phải thuộc `low`, `medium`, `high`, `critical`.
+    Vì sao nên giao cho code: Đây là kiểm tra format và giá trị hợp lệ.
+- Kiểm tra: Nếu `customer_tier = enterprise` và `urgency` là `high` hoặc `critical` thì `requires_human = true`.
+    Vì sao nên giao cho code: Đây là invariant business rule rõ ràng.
+- Kiểm tra: Ticket có signal billing không được route sang `product_team`.
+    Vì sao nên giao cho code: Mapping cấm là rule deterministic.
+- Kiểm tra: Ticket có dấu hiệu `blocking work`, `locked out`, hoặc `account disabled` không được bị gắn `low`.
+    Vì sao nên giao cho code: Có thể bắt bằng rule / keyword / assertion trực tiếp.
+- Kiểm tra: `confidence` phải nằm trong khoảng từ 0 đến 1.
+    Vì sao nên giao cho code: Đây là numeric bound check.
+- Kiểm tra: `reason_codes` phải được suy ra từ nội dung ticket và không bịa thêm thực thể không có trong input.
+    Vì sao nên giao cho code: Có thể đối chiếu token / entity source ở trace hoặc rule-based extraction.
+- Kiểm tra: Ticket enterprise high-risk phải được đưa vào hàng ưu tiên cao.
+    Vì sao nên giao cho code: Đây là mapping state / queue có thể assert được.
+- Kiểm tra: Nếu `route_to` là `technical_support` thì không được gắn đồng thời route billing-only.
+    Vì sao nên giao cho code: Có thể kiểm tra xung đột route bằng logic đơn giản.
+
 ### 6. Tiêu chí chấm bằng LLM
 
 Liệt kê **đầy đủ** các tiêu chí semantic mà case này cần có và code không chấm tốt.
@@ -421,6 +455,21 @@ Mỗi ý nên viết theo dạng:
 - Tiêu chí: [criterion]
   Vì sao code không bắt tốt:
 
+- Tiêu chí: Category có phản ánh đúng bản chất vấn đề của ticket không.
+    Vì sao code không bắt tốt: Cần đọc hiểu ngữ cảnh toàn ticket thay vì chỉ keyword.
+- Tiêu chí: Urgency có tương xứng với mức độ blocking và mức độ ảnh hưởng đến khách enterprise không.
+    Vì sao code không bắt tốt: Mức khẩn phụ thuộc vào judgment vận hành.
+- Tiêu chí: Route có đi đúng team xử lý thực tế không.
+    Vì sao code không bắt tốt: Có nhiều case biên giữa technical, billing, và support.
+- Tiêu chí: Escalation có hợp lý với ticket enterprise và dấu hiệu chặn công việc không.
+    Vì sao code không bắt tốt: Cần hiểu tác động thực tế, không chỉ tìm từ khóa.
+- Tiêu chí: Reason summary có bám đúng lý do chính trong ticket và không bịa thêm chi tiết không có trong input không.
+    Vì sao code không bắt tốt: Đây là semantic groundedness, khó chấm bằng rule thuần.
+- Tiêu chí: Output có đủ ngắn gọn và hữu ích cho nhân sự nội bộ khi đọc inbox không.
+    Vì sao code không bắt tốt: Đây là đánh giá chất lượng sử dụng thực tế.
+- Tiêu chí: AI có biết giữ độ thận trọng khi ticket thiếu tín hiệu hoặc mơ hồ không.
+    Vì sao code không bắt tốt: Cần đọc hiểu hành vi dưới thiếu thông tin.
+
 ### 7. Human / Expert Review
 
 - Ai cần review?
@@ -429,9 +478,9 @@ Mỗi ý nên viết theo dạng:
 
 **Trả lời của bạn:**
 
-Đừng chỉ ghi tên team review. Hãy giải thích vì sao đúng nhóm người đó cần xem, và failure nào cần họ xem.
+Nhân sự support ops hoặc team lead nội bộ là nhóm cần review, vì họ hiểu routing thực tế và có thể xác nhận ticket nào cần ưu tiên hoặc escalate. Họ nên review các case mơ hồ, các case enterprise high/critical, và các case mà summary nghe hợp lý nhưng route hoặc escalation có vẻ sai.
 
-> ...
+Không cần domain expert riêng vì đây là bài toán vận hành support, không đụng đến kiến thức y khoa, pháp lý hay các quyết định chuyên môn khó tách bằng quy trình ops. Human review từ team vận hành đủ để xác nhận what-to-route, what-to-escalate, và các case biên.
 
 Nếu chọn **có domain expert**, bạn phải làm thêm 2 phần dưới đây. Nếu **không cần domain expert**, hãy ghi `Không áp dụng` và giải thích 1 câu.
 
@@ -448,53 +497,26 @@ Expert cần thấy tối thiểu:
 **Trả lời của bạn:**
 
 ```text
-...
+Không áp dụng.
 ```
 
 #### 7B. Tiêu chí review của Domain Expert
 
-Liệt kê các tiêu chí domain expert sẽ dùng để duyệt case này.
+Không áp dụng. Case này không cần domain expert vì các quyết định chính là triage vận hành, có thể được xác nhận bởi support ops và team lead theo rule và rubric đã thống nhất.
 
 ### 8. Release Gate
 
-Đề xuất release gate phù hợp cho case này. Nêu rõ điều kiện chặn, ngưỡng chất lượng tối thiểu, và trường hợp cần human review.
+Tôi đề xuất gate theo hai lớp. Lớp cứng: fail ngay nếu schema vỡ, enum sai, `requires_human` sai với enterprise high/critical, hoặc billing bị route sang `product_team`. Lớp chất lượng: trên tập high-risk phải đạt 100% recall cho escalation bắt buộc, còn route đúng team và urgency đúng phải đạt tối thiểu 95% trên bộ validation đã cân bằng mẫu.
+
+Human review bắt buộc cho các case `unknown`, các case có dấu hiệu blocked work nhưng thiếu thông tin, và các case có confidence thấp nhưng lại chạm business rule cứng. Không cho release nếu còn false negative ở các case enterprise bị chặn công việc hoặc còn route sai lặp lại ở nhóm billing/technical biên.
 
 ### 9. Kế hoạch chạy thử và dự toán chi phí
 
-Làm phần này với giả định team của bạn vừa nhận đề bài triage này từ công ty.
+Tôi sẽ pilot với 72 cases, trong đó trộn đủ happy path, ambiguous, missing info, high-risk escalation, và regression. Mỗi case chạy qua 40 lượt lặp lại để so prompt/model changes và rubric stability, tổng cộng 2,880 lượt eval.
 
-Bạn là PM phụ trách đề xuất cách xây bộ eval, cách chạy thử, và chi phí cần xin để trả lời câu hỏi:
+Phần máy tính tôi tính bằng OpenAI API Pricing cho GPT-5.4 mini, với giá input $0.75 / 1M tokens và output $4.50 / 1M tokens. Giả định trung bình mỗi lượt judge tiêu thụ 700 input tokens và 120 output tokens, tổng token cho 2,880 lượt là 2.016M input và 0.346M output, tương đương khoảng $1.51 + $1.56 = $3.07 API spend.
 
-- hướng làm này hiện chính xác tới đâu
-- cần thêm những checkpoint nào trước khi đề xuất triển khai tiếp
-- và với một khoản budget thử nghiệm nhỏ, team có thể chứng minh được gì
+Phần người: PM / thiết kế eval khoảng 8 giờ, support ops khoảng 10 giờ, human review khoảng 14 giờ. Tổng effort khoảng 32 giờ, đủ để chốt rubric ban đầu, đo lỗi routing/escalation, và chứng minh hệ thống có thể pilot trước khi mở rộng.
 
-README của folder này chỉ cho khung tính. Hãy giữ cách tính đơn giản: phần người tính bằng `giờ công`, phần máy tính bằng `chi phí API key` tính từ **giá thật** của model / dịch vụ bạn chọn.
-
-Để làm phần này, bạn cần tự tính và nêu rõ:
-
-- giá API thật bạn dùng để tính
-- tổng số cases pilot dự kiến
-- tổng số lần chạy / lặp lại dự kiến
-- tổng giờ PM / thiết kế eval
-- tổng giờ vận hành / kỹ thuật
-- tổng giờ human review
-- nếu có `domain expert`, tổng số giờ expert
-- tổng chi phí API key
-- tổng chi phí pilot
-- tổng thời gian dự kiến
-
-Có thể lấy mốc tham khảo để nhẩm nhanh:
-
-- khoảng `50-100 cases`
-- khoảng `30-50 lần chạy / lặp lại`
-
-Không cần trình bày thành bảng. Hãy tự chọn cách trình bày miễn là người đọc nhìn vào hiểu được bạn đã tính gì và chi phí tổng rơi vào đâu.
-
-Sau phần này, viết thêm 2-4 câu ngắn:
-
-- bạn dùng giá API thật từ đâu để tính,
-- với quy mô này chi phí tổng rơi vào khoảng nào,
-- và vì sao plan này đủ để chứng minh case có thể pilot được.
-
----
+Mục tiêu của pilot này là chứng minh 3 việc: schema và rule cứng không vỡ, escalation bắt buộc không bị bỏ sót, và các route phổ biến đã ổn định đủ để đề xuất triển khai thử cho team vận hành.
+```

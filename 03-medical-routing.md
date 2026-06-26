@@ -354,7 +354,9 @@ Hãy viết 2-4 câu, trong đó có cả:
 - bạn chọn lát cắt nào,
 - và vì sao đây là đơn vị đủ nhỏ để eval nhưng vẫn chứa rủi ro đáng kể.
 
-> ...
+Tôi chọn lát cắt là một cuộc gọi hoặc transcript đi vào, sau đó AI phải tóm tắt, nhận diện rủi ro, và gợi ý route tiếp theo. Đây là đơn vị đủ nhỏ để eval vì nó bám vào một lần xử lý đầu vào rõ ràng, nhưng vẫn chứa rủi ro lớn do chỉ cần bỏ sót red flag hoặc route nhầm là có thể làm chậm can thiệp y tế.
+
+Nếu AI sai ở unit này, tổng đài có thể xử lý như case hành chính thường, trong khi thực tế bệnh nhân cần nhân sự y khoa hoặc quy trình khẩn cấp. Vì vậy đây là lát cắt nhỏ nhưng hậu quả đủ lớn để cần gate chặt.
 
 ### 2. Quality Question
 
@@ -375,7 +377,9 @@ Hãy viết 2-4 câu, trong đó có cả:
 - câu hỏi chất lượng bạn chọn,
 - và vì sao nếu fail ở đây thì có thể gây chậm xử lý hoặc mất an toàn.
 
-> ...
+AI có phân biệt đúng cuộc gọi hành chính với cuộc gọi cần nhân sự y khoa can thiệp, và có escalate đúng khi có red flag không? Bắt buộc là không được route các case có dấu hiệu như khó thở, đau ngực, tím tái, ngất, co giật vào queue CSKH thường hoặc câu trả lời trấn an sai.
+
+Nếu fail ở đây, bệnh nhân có thể bị chậm can thiệp hoặc bị đẩy sang sai đội xử lý. Trong bối cảnh y tế, chỉ một lỗi route hoặc làm nhẹ mức độ nguy hiểm cũng có thể tạo ra rủi ro an toàn thực sự.
 
 ### 3. Workflow ASCII do bạn tự thiết kế
 
@@ -389,7 +393,37 @@ Gợi ý:
 **Trả lời của bạn:**
 
 ```text
-...
+Transcript / cuộc gọi đi vào
+  ↓
+Chuẩn hóa transcript + nhận diện số điện thoại / mã hồ sơ / người nhà
+  ↓
+Phân loại sơ bộ:
+- hành chính
+- đơn thuốc / giao thuốc
+- y khoa / triệu chứng
+- mixed / không rõ
+  ↓
+Nếu có red flag rõ ràng?
+  ├─ Có → đẩy vào quy trình khẩn cấp hoặc điều dưỡng / bác sĩ trực [human + expert gate]
+  └─ Không → tiếp tục kiểm tra hồ sơ và route theo taxonomy
+  ↓
+Lookup hồ sơ nếu định danh đủ chắc
+  ↓
+Nếu nhiều hồ sơ khớp hoặc thiếu thông tin → [human review]
+  ↓
+Tổng hợp kết luận:
+- điều bệnh nhân nói
+- điều hệ thống tra cứu được
+- điều AI suy luận
+  ↓
+Route cuối cùng:
+- điều phối lịch hẹn
+- CSKH đơn thuốc / giao thuốc
+- điều dưỡng sàng lọc
+- bác sĩ trực
+- quy trình khẩn cấp
+  ↓
+UI nội bộ hiển thị summary, red flags, evidence, route, và action buttons
 ```
 
 Sau sơ đồ, viết thêm 2-4 câu giải thích:
@@ -405,7 +439,28 @@ Sketch màn hình hoặc trạng thái nội bộ mà tổng đài viên sẽ nh
 **Trả lời của bạn:**
 
 ```text
-...
++----------------------------------------------------------------------------------------------+
+| Medical Call Copilot                                                                         |
++----------------------------------------------------------------------------------------------+
+| Cuộc gọi: MC-0142                    Kênh: Hotline                  Thời gian: 09:12         |
+| Bệnh nhân: Trần Thị Lan              SĐT: 0908123123               Match: Chắc chắn          |
+|----------------------------------------------------------------------------------------------|
+| Tóm tắt cuộc gọi                                                                             |
+| Mẹ bệnh nhân uống thuốc mới, hôm nay nổi mẩn, chóng mặt, hơi khó thở.                        |
+|----------------------------------------------------------------------------------------------|
+| Phân loại AI                                                                               |
+| - Intent: [y khoa]                                                                          |
+| - Severity: [high]                                                                          |
+| - Red flags: [khó thở] [nổi mẩn] [chóng mặt]                                                |
+| - Route đề xuất: [điều dưỡng sàng lọc / bác sĩ trực]                                         |
+| - Cần người xử lý ngay: [Có]                                                                |
+|----------------------------------------------------------------------------------------------|
+| Evidence                                                                                     |
+| - Transcript: "nổi mẩn khắp tay, chóng mặt và hơi khó thở"                                  |
+| - Lookup: thuốc mới kê 2 ngày trước                                                         |
+|----------------------------------------------------------------------------------------------|
+| [Mở transcript] [Xem hồ sơ] [Chuyển bác sĩ] [Escalate khẩn] [Ghi chú tổng đài]               |
++----------------------------------------------------------------------------------------------+
 ```
 
 Sau sketch, viết thêm 2-4 câu giải thích:
@@ -432,7 +487,21 @@ Mẹo:
 
 Đừng chỉ liệt kê field. Với mỗi field bạn giữ lại, hãy giải thích ngắn vì sao nó cần cho UI, routing, warning, hoặc safety gate.
 
-> ...
+Tôi giữ các field sau:
+
+- `call_id`: để trace từng cuộc gọi và phục vụ audit.
+- `transcript_id`: để gắn transcript đã chuẩn hóa với kết quả eval.
+- `patient_match_status`: để biết định danh bệnh nhân chắc chắn hay còn mơ hồ.
+- `patient_id` hoặc `masked_patient_ref`: để route đúng hồ sơ mà không bung dữ liệu dư thừa.
+- `intent_type`: để phân biệt hành chính, đơn thuốc, y khoa, hoặc mixed.
+- `medical_red_flags`: để hiển thị cảnh báo đỏ và chặn route thường.
+- `severity`: để ưu tiên xử lý và quyết định có cần quy trình khẩn cấp không.
+- `route_to`: để hệ thống biết người/đội nhận xử lý tiếp theo.
+- `requires_human`: để buộc tổng đài viên hoặc nurse review khi rủi ro cao.
+- `needs_expert`: để bật gate khi case đụng taxonomy y khoa hoặc khẩn cấp.
+- `evidence_spans`: để chỉ ra câu nào trong transcript dẫn tới quyết định.
+- `summary`: để nhân viên xem nhanh nội dung cuộc gọi.
+- `confidence`: để phân luồng review, nhưng không được dùng như kết luận an toàn cuối cùng.
 
 ### 6. Eval Decision Map
 
@@ -446,12 +515,14 @@ Mẹo:
 
 | Thành phần cần chấm | Code | LLM | Human | Expert | Lý do |
 | --- | ---: | ---: | ---: | ---: | --- |
-|  |  |  |  |  |  |
-|  |  |  |  |  |  |
-|  |  |  |  |  |  |
-|  |  |  |  |  |  |
-|  |  |  |  |  |  |
-|  |  |  |  |  |  |
+| Schema, enums, và numeric range | ✓ |  |  |  | Bắt bằng validator vì đây là invariant xác định. |
+| `patient_match_status` | ✓ |  | ✓ |  | Code bắt được trạng thái match/mismatch; human review case mơ hồ hoặc nhiều hồ sơ. |
+| `intent_type` |  | ✓ | ✓ | ✓ | Có thể chấm semantic bằng LLM, nhưng route y khoa cần human và expert chốt ở các case rìa. |
+| `medical_red_flags` | ✓ | ✓ | ✓ | ✓ | Keyword / rule bắt tín hiệu rõ; LLM và human đánh giá xem có bị bỏ sót hoặc làm nhẹ mức độ không; expert xác nhận ngưỡng red flag. |
+| `severity` |  | ✓ | ✓ | ✓ | Mức độ nghiêm trọng cần judgment, đặc biệt khi dấu hiệu triệu chứng chồng lấp. |
+| `route_to` | ✓ |  | ✓ | ✓ | Một phần là rule-based, nhưng mọi route chạm bác sĩ / khẩn cấp phải có review y khoa. |
+| `summary` |  | ✓ | ✓ |  | Cần đọc hiểu để biết summary có trung thực và không làm nhẹ nguy cơ. |
+| `evidence_spans` | ✓ |  | ✓ | ✓ | Code kiểm span tồn tại; human/expert kiểm evidence có thực sự ủng hộ quyết định hay không. |
 
 Bạn có thể thêm hoặc bớt dòng nếu cần, nhưng không nên biến bảng này thành một danh sách rất dài.
 
@@ -470,6 +541,27 @@ Mỗi ý nên viết theo dạng:
 - Kiểm tra: [rule]
   Vì sao nên giao cho code:
 
+- Kiểm tra: Output phải parse được đúng schema và không thiếu field bắt buộc.
+  Vì sao nên giao cho code: Đây là validation xác định, không cần judgment ngữ nghĩa.
+- Kiểm tra: `intent_type` và `route_to` phải thuộc allowed enums.
+  Vì sao nên giao cho code: Enum và mapping cứng là rule deterministic.
+- Kiểm tra: `patient_match_status` phải phản ánh đúng kết quả lookup và không được tự chốt khi có nhiều hồ sơ khớp.
+  Vì sao nên giao cho code: Có thể kiểm từ nguồn lookup và trạng thái match.
+- Kiểm tra: Nếu transcript chứa red flag rõ như `khó thở`, `đau ngực`, `tím tái`, `ngất`, `co giật` thì `medical_red_flags` không được rỗng.
+  Vì sao nên giao cho code: Keyword / rule detection có thể bắt trực tiếp các tín hiệu bắt buộc.
+- Kiểm tra: `severity` phải không thấp hơn mức quy định khi xuất hiện red flag khẩn cấp.
+  Vì sao nên giao cho code: Đây là invariant safety dễ assert.
+- Kiểm tra: Case có red flag không được route vào `Hành chính / lịch hẹn` hoặc CSKH thường.
+  Vì sao nên giao cho code: Đây là rule cấm rõ ràng.
+- Kiểm tra: Nếu `patient_match_status = ambiguous` thì không được bung toàn bộ hồ sơ y tế.
+  Vì sao nên giao cho code: Có thể check policy / access rule trực tiếp.
+- Kiểm tra: `evidence_spans` phải trỏ tới đúng câu trong transcript và không vượt ngoài range.
+  Vì sao nên giao cho code: Span validity là check máy đọc được.
+- Kiểm tra: `confidence` phải nằm trong khoảng 0 đến 1.
+  Vì sao nên giao cho code: Đây là check numeric đơn giản.
+- Kiểm tra: Nếu `route_to` là bác sĩ trực hoặc quy trình khẩn cấp thì phải có `requires_human = true`.
+  Vì sao nên giao cho code: Đây là rule safety gate cứng.
+
 ### 8. Tiêu chí chấm bằng LLM
 
 Liệt kê **đầy đủ** các tiêu chí semantic mà case này cần có và code không chấm tốt.
@@ -482,6 +574,19 @@ Mỗi ý nên viết theo dạng:
 
 - Tiêu chí: [criterion]
   Vì sao code không bắt tốt:
+
+- Tiêu chí: Summary có phân biệt rõ điều bệnh nhân nói, điều hệ thống tra cứu được, và điều AI suy luận không.
+  Vì sao code không bắt tốt: Cần đọc hiểu cấu trúc thông tin và mức độ grounded.
+- Tiêu chí: AI có làm nhẹ mức độ triệu chứng hoặc dùng ngôn ngữ trấn an sai bối cảnh không.
+  Vì sao code không bắt tốt: Đây là judgment về severity và tone trong ngữ cảnh y khoa.
+- Tiêu chí: Route có hợp lý với triệu chứng, mức độ nghiêm trọng, và tình trạng định danh không.
+  Vì sao code không bắt tốt: Cần đánh giá tổng hợp nhiều tín hiệu cùng lúc.
+- Tiêu chí: AI có biết giữ case ở trạng thái review khi chưa đủ tín hiệu thay vì chốt quá sớm không.
+  Vì sao code không bắt tốt: Đây là đánh giá thái độ thận trọng của hệ thống.
+- Tiêu chí: Evidence được trích dẫn có thực sự ủng hộ red flag và route đề xuất không.
+  Vì sao code không bắt tốt: LLM judge có thể đọc nghĩa tốt hơn rule thuần về groundedness.
+- Tiêu chí: Output có hữu ích cho tổng đài viên và nurse khi xử lý tiếp theo không.
+  Vì sao code không bắt tốt: Đây là đánh giá tính dùng được của sản phẩm.
 
 ### 9. Human / Expert Review
 
@@ -496,7 +601,9 @@ Phần này **không được bỏ trống**.
 
 Không chỉ liệt kê tên vai trò. Hãy giải thích vì sao đúng người đó phải review, và hậu quả sẽ là gì nếu bỏ qua checkpoint đó.
 
-> ...
+Nhân sự vận hành tổng đài và nurse triage là nhóm cần review vì họ có thể xác nhận transcript, symptom clustering, và xem case nào phải nhảy khỏi queue thường. Họ nên review các case mơ hồ, mixed intent, nhiều hồ sơ khớp một số điện thoại, và các case có triệu chứng nhưng chưa đủ rõ để quyết định khẩn cấp.
+
+Domain expert ở đây là bác sĩ hoặc nurse lead có quyền xác nhận taxonomy y khoa, mức độ red flag, và route liên quan đến bác sĩ trực / quy trình khẩn cấp. Nếu bỏ qua checkpoint này, hệ thống có thể hạ thấp mức nguy hiểm hoặc route nhầm sang CSKH hành chính.
 
 Vì case này **bắt buộc có domain expert**, bạn phải hoàn thành thêm 2 phần dưới đây.
 
@@ -515,7 +622,32 @@ Màn hình này nên cho thấy tối thiểu:
 **Trả lời của bạn:**
 
 ```text
-...
++----------------------------------------------------------------------------------------------+
+| Expert Review - Medical Call Copilot                                                         |
++----------------------------------------------------------------------------------------------+
+| Call ID: MC-0142                  Patient: Trần Thị Lan           Priority: High              |
+|----------------------------------------------------------------------------------------------|
+| AI summary                                                                                   |
+| Mẹ bệnh nhân uống thuốc mới, hôm nay nổi mẩn, chóng mặt, hơi khó thở.                        |
+|----------------------------------------------------------------------------------------------|
+| AI route / reason                                                                           |
+| - Route đề xuất: điều dưỡng sàng lọc / bác sĩ trực                                           |
+| - Red flags: khó thở, nổi mẩn, chóng mặt                                                     |
+| - Needs human: Yes                                                                           |
+| - Needs expert: Yes                                                                          |
+|----------------------------------------------------------------------------------------------|
+| Evidence                                                                                     |
+| - Transcript: "nổi mẩn khắp tay, chóng mặt và hơi khó thở"                                  |
+| - Lookup: thuốc mới kê 2 ngày trước                                                           |
+|----------------------------------------------------------------------------------------------|
+| Expert actions                                                                               |
+| [Duyệt route] [Sửa route] [Escalate khẩn] [Ghi chú]                                          |
+|----------------------------------------------------------------------------------------------|
+| Expert checklist                                                                             |
+| [ ] Có red flag hô hấp                                                                        |
+| [ ] Không được route vào queue hành chính                                                     |
+| [ ] Evidence đủ để escalate                                                                   |
++----------------------------------------------------------------------------------------------+
 ```
 
 Sau sketch, viết thêm 2-4 câu giải thích:
@@ -524,53 +656,32 @@ Sau sketch, viết thêm 2-4 câu giải thích:
 - dữ liệu nguồn nào phải hiển thị trực tiếp thay vì chỉ hiện kết luận của AI,
 - và điểm nào dễ gây hại nếu màn hình che mất context.
 
+Expert cần thấy summary, red flags, route, và evidence cùng lúc để kiểm tra nhanh xem AI có làm nhẹ triệu chứng hay route quá an toàn không. Transcript gốc và đoạn lookup bệnh nhân phải hiển thị trực tiếp, vì chỉ nhìn kết luận của AI thì expert không biết quyết định đó có bám vào dữ kiện hay chỉ là suy luận mơ hồ.
+
+Điểm dễ gây hại nhất là khi giao diện chỉ nhấn mạnh route đề xuất mà che mất red flag hoặc che trạng thái định danh chưa chắc chắn. Trong case y tế, che context như vậy có thể làm người duyệt bỏ qua một escalation cần thiết.
+
 #### 9B. Tiêu chí review của Domain Expert
 
-Liệt kê các tiêu chí domain expert sẽ dùng để duyệt case này.
+- Case có đúng là khẩn cấp hoặc gần khẩn cấp theo triệu chứng không.
+- Route có tránh được queue hành chính / CSKH thường không.
+- Red flags có được bắt đủ và không bị làm nhẹ không.
+- Evidence trong transcript có thực sự ủng hộ route mà AI đề xuất không.
+- Nếu nhiều hồ sơ hoặc thiếu định danh, hệ thống có dừng lại để review thay vì bung hồ sơ sai không.
 
 ### 10. Release Gate
 
-Đề xuất release gate phù hợp cho case này. Nêu rõ điều kiện chặn, ngưỡng chất lượng tối thiểu, và trường hợp cần human review hoặc expert review.
+Tôi đề xuất gate rất chặt. Bất kỳ case nào có red flag như khó thở, đau ngực, tím tái, ngất, co giật mà bị route vào queue thường sẽ fail ngay. Trên tập high-risk, recall cho red flag phải là 100%, và mọi route chạm bác sĩ / quy trình khẩn cấp phải có expert signoff trong giai đoạn pilot.
+
+Human review bắt buộc cho case mơ hồ, mixed intent, hoặc nhiều hồ sơ khớp cùng số điện thoại. Không cho release nếu summary làm nhẹ triệu chứng, nếu route thiếu escalation, hoặc nếu system cho phép bung hồ sơ khi patient match chưa chắc chắn.
 
 ### 11. Kế hoạch chạy thử và dự toán chi phí
 
-Làm phần này với giả định team của bạn vừa nhận đề bài routing y tế này từ công ty / tổ chức.
+Tôi sẽ pilot với 60 cases, đủ để bao phủ hành chính bình thường, đơn thuốc / giao thuốc, triệu chứng mơ hồ, red flag khẩn cấp, và regression. Mỗi case chạy 40 lượt lặp lại để kiểm tra prompt changes và ổn định của route, tổng cộng 2,400 lượt eval.
 
-Bạn là PM phụ trách đề xuất cách xây bộ eval, cách chạy thử, và chi phí cần xin để trả lời câu hỏi:
+Tôi dùng giá thật trên OpenAI API Pricing cho GPT-5.4 mini: input $0.75 / 1M tokens và output $4.50 / 1M tokens. Giả định trung bình mỗi lượt judge ăn 1,100 input tokens và 180 output tokens, tổng token cho 2,400 lượt là 2.64M input và 0.432M output, tương đương khoảng $1.98 + $1.94 = $3.92 API spend.
 
-- hướng làm này hiện chính xác tới đâu
-- còn thiếu những checkpoint an toàn nào trước khi có thể đề xuất tiếp
-- và với một khoản budget thử nghiệm nhỏ, team có thể chứng minh được gì
+Phần người: PM / thiết kế eval khoảng 10 giờ, vận hành / điều phối tổng đài khoảng 12 giờ, human review khoảng 18 giờ, domain expert khoảng 16 giờ. Tổng effort khoảng 56 giờ, đủ để chốt rubric, kiểm tra red flag handling, và xác nhận taxonomy an toàn trước khi đề xuất mở rộng.
 
-README của folder này chỉ cho khung tính. Hãy giữ cách tính đơn giản: phần người tính bằng `giờ công`, phần máy tính bằng `chi phí API key` tính từ **giá thật** của model / dịch vụ bạn chọn.
-
-Ở case này, bạn **bắt buộc** phải tính cả thời gian và chi phí cho `domain expert review`.
-
-Để làm phần này, bạn cần tự tính và nêu rõ:
-
-- giá API thật bạn dùng để tính
-- tổng số cases pilot dự kiến
-- tổng số lần chạy / lặp lại dự kiến
-- tổng giờ PM / thiết kế eval
-- tổng giờ vận hành / điều phối tổng đài
-- tổng giờ human review
-- tổng số giờ domain expert
-- tổng chi phí API key
-- tổng chi phí pilot
-- tổng thời gian dự kiến
-
-Có thể lấy mốc tham khảo để nhẩm nhanh:
-
-- khoảng `50-100 cases`
-- khoảng `30-50 lần chạy / lặp lại`
-
-Không cần trình bày thành bảng. Hãy tự chọn cách trình bày miễn là người đọc nhìn vào hiểu được bạn đã tính gì và chi phí tổng rơi vào đâu.
-
-Sau phần này, viết thêm 2-4 câu ngắn:
-
-- bạn dùng giá API thật từ đâu để tính,
-- với quy mô này chi phí tổng rơi vào khoảng nào,
-- expert chiếm khoảng bao nhiêu giờ,
-- và vì sao plan này đủ để chứng minh case có thể pilot an toàn.
+Mục tiêu của pilot này là chứng minh rằng hệ thống không bỏ sót red flag, không route nhầm sang CSKH hành chính, và có thể vận hành một checkpoint expert rõ ràng cho các case high-risk. Chi phí API thấp, nhưng giá trị pilot nằm ở việc chứng minh được ngưỡng an toàn tối thiểu trước khi đi tiếp.
 
 ---
